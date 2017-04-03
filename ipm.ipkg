@@ -1,0 +1,15 @@
+package ipm
+
+brief = "Idris package manager"
+version = 0.1.0.0
+readme = README.md
+license = MIT
+author = Călin Ardelean <mmn80cpu@gmail.com>
+homepage = https://github.com/mmn80/ipm
+sourceloc = git@github.com:mmn80/ipm.git
+bugtracker = https://github.com/mmn80/ipm/issues
+
+sourcedir = src
+modules = Ipm.Interfaces
+main = Main
+executable = ipm
