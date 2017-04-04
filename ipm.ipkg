@@ -9,7 +9,10 @@ homepage = https://github.com/mmn80/ipm
 sourceloc = git@github.com:mmn80/ipm.git
 bugtracker = https://github.com/mmn80/ipm/issues
 
+pkgs = contrib
 sourcedir = src
-modules = Ipm.Interfaces
+modules = Control.ST.StringBuffer
+        , Control.ST.File
+        , Ipm.Interfaces
 main = Main
 executable = ipm
