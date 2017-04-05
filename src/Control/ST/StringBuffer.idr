@@ -3,6 +3,7 @@ module Control.ST.StringBuffer
 import Control.ST
 
 %access public export
+%default total
 
 interface StringBufferIO (m : Type -> Type) where
   StrBuffer : Type
