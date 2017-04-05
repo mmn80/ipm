@@ -4,17 +4,14 @@ import Control.ST
 
 %access public export
 
-data Dummy : (Type -> Type) -> Type where
-  MkDummy : Dummy m
-
 interface StringBufferIO (m : Type -> Type) where
-  StrBuffer : Dummy m -> Type
-  newStringBuffer : (len : Int) -> ST m Var [add (StrBuffer MkDummy)]
-  addToStringBuffer : (sb : Var) -> String -> ST m () [sb ::: StrBuffer MkDummy]
-  getStringFromBuffer : (sb : Var) -> ST m String [remove sb (StrBuffer MkDummy)]
+  StrBuffer : Type
+  newStringBuffer : (len : Int) -> ST m Var [add StrBuffer]
+  addToStringBuffer : (sb : Var) -> String -> ST m () [sb ::: StrBuffer]
+  getStringFromBuffer : (sb : Var) -> ST m String [remove sb StrBuffer]
 
 StringBufferIO IO where
-  StrBuffer _ = State StringBuffer
+  StrBuffer = State StringBuffer
 
   newStringBuffer len = do sb <- lift $ newStringBuffer len
                            new sb

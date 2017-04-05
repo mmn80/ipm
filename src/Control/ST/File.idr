@@ -15,16 +15,19 @@ isModeWriteable Read = False
 isModeWriteable _    = True
 
 interface FileIO (m : Type -> Type) where
-  File : Dummy m -> (mode : Mode) -> Type
+  File : (mode : Mode) -> Type
   fileOpen  : String -> (mode : Mode) ->
-              ST m (Either FileError Var) [addIfRight (File MkDummy mode)]
-  fileClose : (file : Var) -> ST m () [remove file (File MkDummy mode)]
-  fileSize  : (file : Var) -> ST m (Either FileError Int) [file ::: File MkDummy mode]
-  fileEOF   : (file : Var) -> ST m (Either FileError Bool) [file ::: File MkDummy mode]
-  fileRead  : (file : Var) -> (len : Int) -> {auto pf : isModeReadable mode = True} ->
-              ST m (Either FileError String) [file ::: File MkDummy mode]
-  fileWrite : (file : Var) -> (str : String) -> {auto pf : isModeWriteable mode = True} ->
-              ST m (Either FileError ()) [file ::: File MkDummy mode]
+              ST m (Either FileError Var) [addIfRight (File mode)]
+  fileClose : (f : Var) ->
+              ST m () [remove f (File mode)]
+  fileSize  : (f : Var) ->
+              ST m (Either FileError Int) [f ::: File mode]
+  fileEOF   : (f : Var) ->
+              ST m (Either FileError Bool) [f ::: File mode]
+  fileRead  : (f : Var) -> (len : Int) -> {auto pf : isModeReadable mode = True} ->
+              ST m (Either FileError String) [f ::: File mode]
+  fileWrite : (f : Var) -> (str : String) -> {auto pf : isModeWriteable mode = True} ->
+              ST m (Either FileError ()) [f ::: File mode]
 
 -- Implementation for IO
 
@@ -32,7 +35,7 @@ data FileHandle : (hnd : Type) -> (mode : Mode) -> Type where
   MkFile : hnd -> FileHandle hnd mode
 
 FileIO IO where
-  File _ mode = State (FileHandle Prelude.File.File mode)
+  File mode = State (FileHandle Prelude.File.File mode)
 
   fileOpen path mode = do Right h <- lift $ openFile path mode
                                   | Left err => pure (Left err)
@@ -60,24 +63,6 @@ FileIO IO where
                                 | Left err => pure (Left err)
                        pure (Right ())
 
-R : Type
-R = State $ FileHandle File Read
-
-W : Type
-W = State $ FileHandle File WriteTruncate
-
-A : Type
-A = State $ FileHandle File Append
-
-RW : Type
-RW = State $ FileHandle File ReadWrite
-
-RWPlus : Type
-RWPlus = State $ FileHandle File ReadWriteTruncate
-
-APlus : Type
-APlus = State $ FileHandle File ReadAppend
-
 readFile : (FileIO m, StringBufferIO m) => (path : String) ->
            ST m (Either FileError String) []
 readFile path = with ST do
@@ -90,8 +75,8 @@ readFile path = with ST do
   pure $ map (const str) r
  where
   readFile' : (FileIO m, StringBufferIO m) => (f : Var) -> Int -> (sb : Var) ->
-              ST m (Either FileError ()) [f ::: (File (the (Dummy m) MkDummy) Read)
-                                       , sb ::: StrBuffer (the (Dummy m) MkDummy)]
+              ST m (Either FileError ())
+              [f ::: (File {m=m} Read), sb ::: StrBuffer {m=m}]
   readFile' f max sb = with ST do
     Right x <- call $ fileEOF f | Left e => pure (Left e)
     if not x && max > 0
