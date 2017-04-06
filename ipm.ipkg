@@ -11,7 +11,8 @@ bugtracker = https://github.com/mmn80/ipm/issues
 
 pkgs = contrib
 sourcedir = src
-modules = Control.ST.StringBuffer
+modules = Control.ST.Error
+        , Control.ST.StringBuffer
         , Control.ST.File
         , Ipm.Interfaces
 main = Main
