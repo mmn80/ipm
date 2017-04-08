@@ -1,6 +1,7 @@
 module Control.ST.File
 
 import Control.ST
+import Control.ST.ImplicitCall
 import Control.ST.Error
 import Control.ST.StringBuffer
 
@@ -82,22 +83,22 @@ FileIO IO where
 readFile : (FileIO m, StringBufferIO m) => (path : String) ->
            ST m (Result [FileError] String) []
 readFile path = with ST do
-  Ok f <- call $ fileOpen path Read | Err e => err e
-  Ok sz <- call $ fileSize f | Err e => do fileClose f; err e
-  sb <- call $ newStringBuffer (sz + 1)
+  Ok f <- fileOpen path Read | Err e => err e
+  Ok sz <- fileSize f        | Err e => do fileClose f; err e
+  sb <- newStringBuffer (sz + 1)
   r <- readFile' f sz sb
-  str <- call $ getStringFromBuffer sb
-  call $ fileClose f
+  str <- getStringFromBuffer sb
+  fileClose f
   pure $ map (const str) r
  where
   readFile' : (FileIO m, StringBufferIO m) => (f : Var) -> Int -> (sb : Var) ->
               ST m (Result [FileError] ())
               [f ::: File {m=m} Read, sb ::: StrBuffer {m=m}]
   readFile' f sz sb = with ST do
-    Ok x <- call $ fileEOF f | Err e => err e
+    Ok x <- fileEOF f | Err e => err e
     if not x && sz > 0
-      then do Ok l <- call $ fileRead f 1024000 | Err e => err e
-              call $ addToStringBuffer sb l
+      then do Ok l <- fileRead f 1024000 | Err e => err e
+              addToStringBuffer sb l
               assert_total $ readFile' f (sz - 1024000) sb
       else pure (Ok ())
 

@@ -8,7 +8,7 @@ import Control.ST
 
 data SomeError : (es : List Type) -> Type where
   SomeErr : (err : e) -> SomeError (e::es)
-  Skip    : (rs : SomeError (es)) -> SomeError (e::es)
+  Skip    : (rs : SomeError es) -> SomeError (e::es)
 
 data Result : (es : List Type) -> (r : Type) -> Type where
   Ok  : (res : r) -> Result es r
