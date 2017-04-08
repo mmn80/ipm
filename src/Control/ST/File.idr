@@ -1,7 +1,6 @@
 module Control.ST.File
 
 import Control.ST
-import Control.ST.Symbol
 import Control.ST.Error
 import Control.ST.StringBuffer
 
@@ -21,61 +20,29 @@ isModeWriteable _    = True
 
 -- API
 
-FIO : Type
-FIO = State Sym
+namespace FileIO
+  Res : Type -> Type
+  Res r = Result [FileError] r
 
-interface SymbolIO m => FileIO (m : Type -> Type) where
-  fileIOinit  : (tbl : Var) -> ST m Var [add FIO, tbl ::: SymTable {m=m}]
-  fileIOclose : (s : Var) -> ST m () [remove s FIO]
-
+interface FileIO (m : Type -> Type) where
   File : (mode : Mode) -> Type
 
-  fileOpen  : (s : Var) -> String -> (mode : Mode) ->
-              ST m (Result Var) [addIfOk (File mode), s ::: FIO]
-  fileClose : (s : Var) -> (f : Var) ->
-              ST m () [remove f (File mode), s ::: FIO]
-  fileSize  : (s : Var) -> (f : Var) ->
-              ST m (Result Int) [f ::: File mode, s ::: FIO]
-  fileEOF   : (s : Var) -> (f : Var) ->
-              ST m (Result Bool) [f ::: File mode, s ::: FIO]
-  fileRead  : (s : Var) -> (f : Var) -> (len : Int) ->
+  fileOpen  : String -> (mode : Mode) ->
+              ST m (Res Var) [addIfOk (File mode)]
+  fileClose : (f : Var) ->
+              ST m () [remove f (File mode)]
+  fileSize  : (f : Var) ->
+              ST m (Res Int) [f ::: File mode]
+  fileEOF   : (f : Var) ->
+              ST m (Res Bool) [f ::: File mode]
+  fileRead  : (f : Var) -> (len : Int) ->
               {auto pf : isModeReadable mode = True} ->
-              ST m (Result String) [f ::: File mode, s ::: FIO]
-  fileWrite : (s : Var) -> (f : Var) -> (str : String) ->
+              ST m (Res String) [f ::: File mode]
+  fileWrite : (f : Var) -> (str : String) ->
               {auto pf : isModeWriteable mode = True} ->
-              ST m (Result ()) [f ::: File mode, s ::: FIO]
+              ST m (Res ()) [f ::: File mode]
 
 -- FileIO implementation for IO
-
-errGenericFileError : Sym -> Sym
-errGenericFileError sym = subSym sym 0
-
-errFileReadError : Sym -> Sym
-errFileReadError sym = subSym sym 1
-
-errFileWriteError : Sym -> Sym
-errFileWriteError sym = subSym sym 2
-
-errFileNotFound : Sym -> Sym
-errFileNotFound sym = subSym sym 3
-
-errPermissionDenied : Sym -> Sym
-errPermissionDenied sym = subSym sym 4
-
-fileErrorConv : (s : Sym) -> (err : FileError) -> Error
-fileErrorConv s err = MkError (e2s s err) (show err)
-  where
-    e2s : Sym -> FileError -> Sym
-    e2s sym (GenericFileError x) = errGenericFileError sym
-    e2s sym FileReadError        = errFileReadError sym
-    e2s sym FileWriteError       = errFileWriteError sym
-    e2s sym FileNotFound         = errFileNotFound sym
-    e2s sym PermissionDenied     = errPermissionDenied sym
-
-private
-error : (s : Sym) -> (err : FileError) ->
-        STrans m (Result r) (out_fn (Err $ fileErrorConv s err)) out_fn
-error s err = pure (Err $ fileErrorConv s err)
 
 data FileHandle : (hnd : Type) -> (mode : Mode) -> Type where
   MkFile : hnd -> FileHandle hnd mode
@@ -83,65 +50,54 @@ data FileHandle : (hnd : Type) -> (mode : Mode) -> Type where
 FileIO IO where
   File mode = State (FileHandle Prelude.File.File mode)
 
-  fileIOinit tbl = do s <- genSym tbl --new !(genSym tbl) ...> INTERNAL ERROR
-                      new s
+  fileOpen path mode = do Right h <- lift $ openFile path mode
+                                  | Left e => pure (serr e)
+                          var <- new $ MkFile h
+                          pure (Ok var)
 
-  fileIOclose s = delete s
+  fileClose f = do MkFile h <- read f
+                   lift $ closeFile h
+                   delete f
 
-  fileOpen s path mode = do Right h <- lift $ openFile path mode
-                                    | Left e => error !(read s) e
-                            var <- new $ MkFile h
-                            pure (Ok var)
+  fileSize f = do MkFile h <- read f
+                  Right sz <- lift $ fileSize h
+                           | Left e => pure (serr e)
+                  pure (Ok sz)
 
-  fileClose s f = do MkFile h <- read f
-                     lift $ closeFile h
-                     delete f
+  fileEOF f = do MkFile h <- read f
+                 pure $ Ok !(lift $ fEOF h)
 
-  fileSize s f = do MkFile h <- read f
-                    Right sz <- lift $ fileSize h | Left e => error !(read s) e
-                    pure (Ok sz)
+  fileRead f len = do MkFile h <- read f
+                      Right str <- lift $ fGetChars h len
+                                | Left e => pure (serr e)
+                      pure (Ok str)
 
-  fileEOF s f = do MkFile h <- read f
-                   pure $ Ok !(lift $ fEOF h)
-
-  fileRead s f len = do MkFile h <- read f
-                        Right str <- lift $ fGetChars h len
-                                  | Left e => error !(read s) e
-                        pure (Ok str)
-
-  fileWrite s f str = do MkFile h <- read f
-                         Right () <- lift $ fPutStr h str
-                                  | Left e => error !(read s) e
-                         pure (Ok ())
+  fileWrite f str = do MkFile h <- read f
+                       Right () <- lift $ fPutStr h str
+                                | Left e => pure (serr e)
+                       pure (Ok ())
 
 -- Example generic function
 
-readFile : (FileIO m, StringBufferIO m) => (s : Var) -> (path : String) ->
-           ST m (Result String) [s ::: FIO]
-readFile s path = with ST do
-  Ok f <- call $ fileOpen s path Read | Err e => err e
-  Ok sz <- call $ fileSize s f | Err e => do fileClose s f; err1 s e
+readFile : (FileIO m, StringBufferIO m) => (path : String) ->
+           ST m (Result [FileError] String) []
+readFile path = with ST do
+  Ok f <- call $ fileOpen path Read | Err e => err e
+  Ok sz <- call $ fileSize f | Err e => do fileClose f; err e
   sb <- call $ newStringBuffer (sz + 1)
-  r <- readFile' s f sz sb
+  r <- readFile' f sz sb
   str <- call $ getStringFromBuffer sb
-  call $ fileClose s f
+  call $ fileClose f
   pure $ map (const str) r
  where
-  readFile' : (FileIO m, StringBufferIO m) =>
-              (s : Var) -> (f : Var) -> Int -> (sb : Var) ->
-              ST m (Result ()) [f  ::: File {m=m} Read,
-                                s  ::: FIO,
-                                sb ::: StrBuffer {m=m}]
-  readFile' s f sz sb = with ST do
-    Ok x <- call $ fileEOF s f | Err e => err e
+  readFile' : (FileIO m, StringBufferIO m) => (f : Var) -> Int -> (sb : Var) ->
+              ST m (Result [FileError] ())
+              [f ::: File {m=m} Read, sb ::: StrBuffer {m=m}]
+  readFile' f sz sb = with ST do
+    Ok x <- call $ fileEOF f | Err e => err e
     if not x && sz > 0
-      then do Ok l <- call $ fileRead s f 1024000 | Err e => err e
+      then do Ok l <- call $ fileRead f 1024000 | Err e => err e
               call $ addToStringBuffer sb l
-              assert_total $ readFile' s f (sz - 1024000) sb
+              assert_total $ readFile' f (sz - 1024000) sb
       else pure (Ok ())
-
-  err1 : (FileIO m) => (s : Var) -> Error -> ST m (Result r) [s ::: FIO]
-  err1 s e = do sym <- read s
-                symElim (errCode e) [(errFileNotFound sym, (pure $ Err e))]
-                                     (pure $ Err e)
 
