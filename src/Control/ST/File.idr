@@ -52,7 +52,7 @@ FileIO IO where
   File mode = State (FileHandle Prelude.File.File mode)
 
   fileOpen path mode = do Right h <- lift $ openFile path mode
-                                  | Left e => pure (serr e)
+                                  | Left e => resErr e
                           var <- new $ MkFile h
                           pure (Ok var)
 
@@ -62,7 +62,7 @@ FileIO IO where
 
   fileSize f = do MkFile h <- read f
                   Right sz <- lift $ fileSize h
-                           | Left e => pure (serr e)
+                           | Left e => resErr e
                   pure (Ok sz)
 
   fileEOF f = do MkFile h <- read f
@@ -70,12 +70,12 @@ FileIO IO where
 
   fileRead f len = do MkFile h <- read f
                       Right str <- lift $ fGetChars h len
-                                | Left e => pure (serr e)
+                                | Left e => resErr e
                       pure (Ok str)
 
   fileWrite f str = do MkFile h <- read f
                        Right () <- lift $ fPutStr h str
-                                | Left e => pure (serr e)
+                                | Left e => resErr e
                        pure (Ok ())
 
 -- Example generic function
@@ -83,13 +83,13 @@ FileIO IO where
 readFile : (FileIO m, StringBufferIO m) => (path : String) ->
            ST m (Result [FileError] String) []
 readFile path = with ST do
-  Ok f <- fileOpen path Read | Err e => err e
-  Ok sz <- fileSize f        | Err e => do fileClose f; err e
+  Ok f <- fileOpen path Read | Err e => err1 e
+  Ok sz <- fileSize f        | Err e => do fileClose f; err1 e
   sb <- newStringBuffer (sz + 1)
   r <- readFile' f sz sb
   str <- getStringFromBuffer sb
   fileClose f
-  pure $ map (const str) r
+  pure $ const str <$> r
  where
   readFile' : (FileIO m, StringBufferIO m) => (f : Var) -> Int -> (sb : Var) ->
               ST m (Result [FileError] ())
@@ -100,5 +100,4 @@ readFile path = with ST do
       then do Ok l <- fileRead f 1024000 | Err e => err e
               addToStringBuffer sb l
               assert_total $ readFile' f (sz - 1024000) sb
-      else pure (Ok ())
-
+      else pure $ Ok ()
