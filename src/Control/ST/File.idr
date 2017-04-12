@@ -2,7 +2,7 @@ module Control.ST.File
 
 import Control.ST
 import Control.ST.ImplicitCall
-import Control.ST.Error
+import public Control.ST.Error
 import Control.ST.StringBuffer
 
 %access public export
@@ -28,7 +28,7 @@ namespace FileIO
 interface FileIO (m : Type -> Type) where
   File : (mode : Mode) -> Type
 
-  fileOpen  : String -> (mode : Mode) ->
+  fileOpen  : (path : String) -> (mode : Mode) ->
               ST m (Res Var) [addIfOk (File mode)]
   fileClose : (f : Var) ->
               ST m () [remove f (File mode)]
