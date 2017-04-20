@@ -33,15 +33,23 @@ fieldMerge xs ys = go xs (sortBy (\(n, _), (n', _) => compare n n') ys)
 merge : Record fs -> Record fs' -> Record (fieldMerge fs fs')
 merge r r' = ?rhs
 
-testRec : (flds : List FieldTy ** Record flds)
-testRec = (_ ** [(Fld "age"   _, 666),
-                 (Fld "name"  _, "Bender"),
-                 (Fld "parts" _, [(Fld "head" _, 5),
-                                  (Fld "ass"  _, "shiny metal")])])
+testRec : Record [("age"  , Int),
+                  ("name" , String),
+                  ("parts", Record [("ass", String), ("head", Int)])]
+testRec = [(Fld "age"   _, 666),
+           (Fld "name"  _, "Bender Bending Rodriguez"),
+           (Fld "parts" _, [(Fld "ass"  _, "shiny metal"),
+                            (Fld "head" _, 42)])]
 
-testFn : (flds : List FieldTy ** Record flds) -> (flds' : List FieldTy ** Record flds')
-testFn (_ ** [(Fld "age" _, age), (Fld "name"  _, name),
-              (Fld "parts" _, (Fld "head" _, head) (Record.::) parts)
-             ])
-     = (_ ** [(Fld "result" _, name)])
-testFn _ = (_ ** [(Fld "error" _, "Type Error!")])
+testFn : Record [("age", t_age),
+                 ("name", t_name),
+                 ("parts", Record (("ass", t_ass) :: parts))] ->
+         Record [("result", t_name)]
+testFn [(Fld "age" _, age),
+        (Fld "name"  _, name),
+        (Fld "parts" _, (Fld "ass" _, ass) :: parts)
+       ]
+     = [(Fld "result" _, name)]
+
+testApp : Record [("result", String)]
+testApp = testFn testRec
