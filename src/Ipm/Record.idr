@@ -4,6 +4,7 @@ import Data.Vect
 
 %access public export
 %default total
+%language ElabReflection
 
 Name : Type
 Name = String
@@ -22,6 +23,17 @@ namespace Record
   head : Record (f::fs) -> Record [f]
   head (x :: _) = [x]
 
+name2Str : TTName -> Elab ()
+name2Str name = do
+  let n = case name of
+            UN str => str
+            _ => "WRONG"
+  fill $ RConstant (Str n)
+  solve
+
+syntax {fld} ":." [ty]  = (%runElab (name2Str `{{fld}}), ty)
+syntax {fld} ":=" [val] = (Fld (%runElab (name2Str `{{fld}})), val)
+
 fieldMerge : List FieldTy -> List FieldTy -> List FieldTy
 fieldMerge xs ys = go xs (sortBy (\(n, _), (n', _) => compare n n') ys)
   where
@@ -36,24 +48,21 @@ fieldMerge xs ys = go xs (sortBy (\(n, _), (n', _) => compare n n') ys)
 merge : Record fs -> Record fs' -> Record (fieldMerge fs fs')
 merge r r' = ?rhs
 
-testRec : Record [("age"  , Int),
-                  ("name" , String),
-                  ("parts", Record [("ass", String), ("head", Int)])]
-testRec = [(Fld "age"  , 666),
-           (Fld "name" , "Bender Bending Rodriguez"),
-           (Fld "parts", [(Fld "ass" , "shiny metal"),
-                          (Fld "head", 42)])]
+bender : Record [age :. Int, name :. String,
+                (parts :. Record [ass :. String, head :. Int])]
+bender = [age := 666, name := "Bender Bending Rodriguez",
+         (parts := [ass := "shiny metal", head := 42])]
 
-testFn : Record (("age", t_age)
-              :: ("name", t_name)
-              :: ("parts", Record (("ass", t_ass) :: parts))
+testFn : Record ((age :. t_age)
+              :: (name :. t_name)
+              :: (parts :. Record ((ass :. t_ass) :: otherParts))
               :: other) ->
-         Record (("result", t_name) :: parts)
-testFn ((Fld "age"  , age)
-     :: (Fld "name" , name)
-     :: (Fld "parts", (Fld "ass", ass) :: parts)
+         Record ((result :. t_name) :: otherParts)
+testFn ((age := age)
+     :: (name := name)
+     :: (parts := (ass := ass) :: otherParts)
      :: other)
-     = (Fld "result", name) :: parts
+     = (result := name) :: otherParts
 
-testApp : Record [("result", String)]
-testApp = head (testFn testRec)
+testApp : Record [result :. String]
+testApp = head (testFn bender)
