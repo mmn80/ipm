@@ -31,8 +31,9 @@ name2Str name = do
   fill $ RConstant (Str n)
   solve
 
-syntax {fld} ":." [ty]  = (%runElab (name2Str `{{fld}}), ty)
-syntax {fld} ":=" [val] = (Fld (%runElab (name2Str `{{fld}})), val)
+term    syntax {fld} ":." [ty]  = (%runElab (name2Str `{{fld}}), ty)
+term    syntax {fld} ":=" [val] = (Fld (%runElab (name2Str `{{fld}})), val)
+pattern syntax {fld} "~"  [val] = (Fld (%runElab (name2Str `{{fld}})), val)
 
 fieldMerge : List FieldTy -> List FieldTy -> List FieldTy
 fieldMerge xs ys = go xs (sortBy (\(n, _), (n', _) => compare n n') ys)
@@ -48,21 +49,23 @@ fieldMerge xs ys = go xs (sortBy (\(n, _), (n', _) => compare n n') ys)
 merge : Record fs -> Record fs' -> Record (fieldMerge fs fs')
 merge r r' = ?rhs
 
-bender : Record [age :. Int, name :. String,
+bender : Record [age :. Int, name :. String, bend :. (Int -> Int),
                 (parts :. Record [ass :. String, head :. Int])]
-bender = [age := 666, name := "Bender Bending Rodriguez",
+bender = [age := 666, name := "Bender Bending Rodriguez", bend := (+1),
          (parts := [ass := "shiny metal", head := 42])]
 
 testFn : Record ((age :. t_age)
               :: (name :. t_name)
+              :: (bend :. t_age -> t_age)
               :: (parts :. Record ((ass :. t_ass) :: otherParts))
               :: other) ->
-         Record ((result :. t_name) :: otherParts)
-testFn ((age := age)
-     :: (name := name)
-     :: (parts := (ass := ass) :: otherParts)
+         Record ((result :. t_name) :: (newAge :. t_age) :: otherParts)
+testFn ((age ~ age)
+     :: (name ~ name)
+     :: (bend ~ bend)
+     :: (parts ~ ((ass ~ ass) :: otherParts))
      :: other)
-     = (result := name) :: otherParts
+     = (result := name) :: (newAge := bend age) :: otherParts
 
 testApp : Record [result :. String]
 testApp = head (testFn bender)
